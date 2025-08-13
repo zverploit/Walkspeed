@@ -1,0 +1,309 @@
+local player = game.Players.LocalPlayer
+local gui = Instance.new("ScreenGui")
+gui.Parent = player:WaitForChild("PlayerGui")
+gui.Name = "CheckpointLoggerGUI"
+
+local HttpService = game:GetService("HttpService")
+
+-- Auto-Update Configuration
+local SCRIPT_VERSION = "1.0"
+local SOURCE_URL = "https://raw.githubusercontent.com/Username/Repositori/main/CheckpointLoggerGUI.lua" -- Ganti dengan URL mentah GitHub Anda
+
+-- Function to check for updates
+local function checkForUpdates()
+    local success, response = pcall(function()
+        return HttpService:GetAsync(SOURCE_URL)
+    end)
+    if success then
+        if response:sub(1, 5) == "local" then
+            print("Update available! New script downloaded.")
+            -- Catatan: Roblox tidak mendukung penulisan file langsung.
+            -- Contoh reload: game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId)
+        else
+            print("Update failed: Invalid script format")
+        end
+    else
+        print("Update failed: Unable to fetch script")
+    end
+end
+
+-- Run auto-update check on script start
+spawn(function()
+    checkForUpdates()
+end)
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0.5, 0, 0.4, 0)
+mainFrame.Position = UDim2.new(0.25, 0, 0.3, 0)
+mainFrame.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = gui
+
+-- Title bar for dragging and minimize
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 30)
+titleBar.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
+titleBar.Parent = mainFrame
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(0.7, 0, 1, 0)
+titleLabel.Position = UDim2.new(0, 0, 0, 0)
+titleLabel.Text = "Mount Daun Checkpoint Debug Logger"
+titleLabel.TextColor3 = Color3.new(1, 1, 1)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Font = Enum.Font.SourceSansBold
+titleLabel.TextSize = 18
+titleLabel.Parent = titleBar
+
+-- Start/Stop button
+local startButton = Instance.new("TextButton")
+startButton.Size = UDim2.new(0.15, 0, 1, 0)
+startButton.Position = UDim2.new(0.7, 0, 0, 0)
+startButton.Text = "Start"
+startButton.BackgroundColor3 = Color3.new(0.3, 0.8, 0.3)
+startButton.TextColor3 = Color3.new(1, 1, 1)
+startButton.Parent = titleBar
+
+-- Minimize button
+local minimizeButton = Instance.new("TextButton")
+minimizeButton.Size = UDim2.new(0.15, 0, 1, 0)
+minimizeButton.Position = UDim2.new(0.85, 0, 0, 0)
+minimizeButton.Text = "-"
+minimizeButton.BackgroundColor3 = Color3.new(0.3, 0.3, 0.3)
+minimizeButton.TextColor3 = Color3.new(1, 1, 1)
+minimizeButton.Parent = titleBar
+
+-- Log scrolling frame
+local logFrame = Instance.new("ScrollingFrame")
+logFrame.Size = UDim2.new(1, 0, 1, -30)
+logFrame.Position = UDim2.new(0, 0, 0, 30)
+logFrame.BackgroundColor3 = Color3.new(0.15, 0.15, 0.15)
+logFrame.ScrollBarThickness = 8
+logFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+logFrame.Parent = mainFrame
+
+local logText = Instance.new("TextLabel")
+logText.Size = UDim2.new(1, -10, 1, 0)
+logText.Position = UDim2.new(0, 5, 0, 5)
+logText.Text = "Logs:\nClick 'Start' to begin detection.\n"
+logText.TextColor3 = Color3.new(1, 1, 1)
+logText.BackgroundTransparency = 1
+logText.TextSize = 14
+logText.TextWrapped = true
+logText.TextYAlignment = Enum.TextYAlignment.Top
+logText.Parent = logFrame
+
+-- Function to format coordinates
+local function formatVector3(vector)
+    return string.format("x: %.1f, y: %.1f, z: %.1f", vector.X, vector.Y, vector.Z)
+end
+
+-- Function to add log (to GUI and F9 console)
+local function addLog(message)
+    local timestamp = os.date("%H:%M:%S")
+    local logMessage = timestamp .. " - " .. message
+    print(logMessage) -- Print to F9 console
+    logText.Text = logText.Text .. logMessage .. "\n"
+    logFrame.CanvasSize = UDim2.new(0, 0, 0, logText.TextBounds.Y + 10)
+end
+
+-- Function to send notification
+local function sendNotification(title, text)
+    game.StarterGui:SetCore("SendNotification", {
+        Title = title,
+        Text = text,
+        Duration = 5
+    })
+end
+
+-- Minimize toggle
+local minimized = false
+minimizeButton.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    logFrame.Visible = not minimized
+    minimizeButton.Text = minimized and "+" or "-"
+    mainFrame.Size = minimized and UDim2.new(0.5, 0, 0, 30) or UDim2.new(0.5, 0, 0.4, 0)
+end)
+
+-- Draggable functionality
+local UserInputService = game:GetService("UserInputService")
+local dragging, dragInput, dragStart, startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+titleBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
+    end
+end)
+
+-- Logging variables
+local loggingEnabled = false
+local connections = {}
+
+-- Start/Stop logging
+startButton.MouseButton1Click:Connect(function()
+    loggingEnabled = not loggingEnabled
+    startButton.Text = loggingEnabled and "Stop" or "Start"
+    startButton.BackgroundColor3 = loggingEnabled and Color3.new(0.8, 0.3, 0.3) or Color3.new(0.3, 0.8, 0.3)
+    if loggingEnabled then
+        addLog("Logging started. Scanning for hidden/invisible checkpoints and mechanics...")
+        setupTouchLogs()
+        setupLeaderstatsMonitor()
+        sendNotification("Logger", "Logging enabled. Detecting hidden systems...")
+    else
+        addLog("Logging stopped.")
+        for _, conn in ipairs(connections) do
+            conn:Disconnect()
+        end
+        connections = {}
+        sendNotification("Logger", "Logging disabled.")
+    end
+end)
+
+-- Respawn log
+player.CharacterAdded:Connect(function(char)
+    if loggingEnabled then
+        local pos = formatVector3(char.PrimaryPart.Position)
+        addLog("Player respawned at position: " .. pos)
+        sendNotification("Respawn Detected", "Respawned at " .. pos)
+    end
+end)
+
+-- Monitor RespawnLocation changes
+player:GetPropertyChangedSignal("RespawnLocation"):Connect(function()
+    if loggingEnabled then
+        local newLocation = player.RespawnLocation
+        if newLocation then
+            local pos = formatVector3(newLocation.Position)
+            addLog("Checkpoint activated! RespawnLocation updated to: " .. newLocation.Name .. " at " .. pos)
+            sendNotification("Checkpoint Activated", newLocation.Name .. " at " .. pos)
+        else
+            addLog("RespawnLocation cleared.")
+        end
+    end
+end)
+
+-- Expanded potential names for Mount Daun
+local potentialNames = {"checkpoint", "finish", "stage", "cp", "spawnpoint", "touchpoint", "spawn", "respawn", "obby", "shelter", "daun", "mount", "hidden"}
+
+-- Setup touch logs, including hidden/invisible parts
+local function setupTouchLogs()
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") or obj:IsA("SpawnLocation") then
+            local isPotential = obj:IsA("SpawnLocation") or obj.Transparency >= 0.5
+            if not isPotential then
+                for _, name in ipairs(potentialNames) do
+                    if obj.Name:lower():find(name) then
+                        isPotential = true
+                        break
+                    end
+                end
+            end
+            if isPotential then
+                local visibility = obj.Transparency >= 0.5 and " (Hidden/Invisible)" or ""
+                local pos = formatVector3(obj.Position)
+                addLog("Detected potential checkpoint: " .. obj.Name .. " (" .. obj.ClassName .. ")" .. visibility .. " at " .. pos)
+                local conn = obj.Touched:Connect(function(hit)
+                    if loggingEnabled and hit.Parent == player.Character then
+                        local touchPos = formatVector3(obj.Position)
+                        addLog("Touched potential checkpoint" .. visibility .. ": " .. obj.Name .. " at " .. touchPos)
+                        sendNotification("Touched Checkpoint", obj.Name .. visibility .. " at " .. touchPos)
+                    end
+                end)
+                table.insert(connections, conn)
+            end
+        end
+    end
+end
+
+-- Listen for new objects
+workspace.DescendantAdded:Connect(function(obj)
+    if loggingEnabled and (obj:IsA("BasePart") or obj:IsA("SpawnLocation")) then
+        local isPotential = obj:IsA("SpawnLocation") or obj.Transparency >= 0.5
+        if not isPotential then
+            for _, name in ipairs(potentialNames) do
+                if obj.Name:lower():find(name) then
+                    isPotential = true
+                    break
+                end
+            end
+        end
+        if isPotential then
+            local visibility = obj.Transparency >= 0.5 and " (Hidden/Invisible)" or ""
+            local pos = formatVector3(obj.Position)
+            addLog("New potential checkpoint added: " .. obj.Name .. " (" .. obj.ClassName .. ")" .. visibility .. " at " .. pos)
+            local conn = obj.Touched:Connect(function(hit)
+                if loggingEnabled and hit.Parent == player.Character then
+                    local touchPos = formatVector3(obj.Position)
+                    addLog("Touched " .. obj.Name .. visibility .. " at " .. touchPos)
+                    sendNotification("Touched Checkpoint", obj.Name .. visibility .. " at " .. touchPos)
+                end
+            end)
+            table.insert(connections, conn)
+        end
+    end
+end)
+
+-- Monitor leaderstats for checkpoint updates
+local function setupLeaderstatsMonitor()
+    local leaderstats = player:FindFirstChild("leaderstats")
+    if leaderstats then
+        addLog("Leaderstats detected. Monitoring for changes...")
+        for _, stat in ipairs(leaderstats:GetChildren()) do
+            if stat:IsA("IntValue") or stat:IsA("NumberValue") or stat:IsA("StringValue") then
+                local conn = stat.Changed:Connect(function(newValue)
+                    if loggingEnabled then
+                        addLog("Leaderstat updated: " .. stat.Name .. " changed to " .. tostring(newValue) .. " (Potential checkpoint progress)")
+                        sendNotification("Progress Update", stat.Name .. " changed to " .. tostring(newValue))
+                    end
+                end)
+                table.insert(connections, conn)
+            end
+        end
+    else
+        addLog("No leaderstats found. Monitoring for creation...")
+        local conn = player.ChildAdded:Connect(function(child)
+            if child.Name == "leaderstats" then
+                setupLeaderstatsMonitor()
+            end
+        end)
+        table.insert(connections, conn)
+    end
+end
+
+-- Health change for death
+if player.Character then
+    local humanoid = player.Character:WaitForChild("Humanoid")
+    humanoid.HealthChanged:Connect(function(health)
+        if loggingEnabled and health <= 0 then
+            addLog("Player died. Awaiting respawn.")
+            sendNotification("Death Detected", "Player died. Respawn incoming.")
+        end
+    end)
+end
+
+-- Initial log
+addLog("GUI ready. Press Start to detect hidden checkpoints, monitor progress in Mount Daun.")
